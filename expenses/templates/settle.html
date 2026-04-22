@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Settle Up — ContriKar{% endblock %}
+{% block nav_settle %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Settle Up</h1>
+    <p class="page-subtitle">Minimum transactions to clear all debts</p>
+</div>
+
+<!-- Net Balances -->
+<section class="section">
+    <h2 class="section-title">Net Balances</h2>
+    <div class="balance-grid">
+        {% for b in balances %}
+        <div class="balance-card {% if b.balance > 0 %}balance-positive{% elif b.balance < 0 %}balance-negative{% else %}balance-zero{% endif %}">
+            <div class="balance-name">{{ b.user.name }}</div>
+            <div class="balance-amount">
+                {% if b.balance > 0 %}+{% endif %}₹{{ b.balance }}
+            </div>
+            <div class="balance-label">{{ b.status }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Settlement Transactions -->
+<section class="section">
+    <h2 class="section-title">Transactions</h2>
+    <div class="settle-list">
+        {% for t in transactions %}
+        <div class="settle-card">
+            <div class="settle-from">{{ t.from_user.name }}</div>
+            <div class="settle-arrow">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </div>
+            <div class="settle-to">{{ t.to_user.name }}</div>
+            <div class="settle-amount">₹{{ t.amount }}</div>
+        </div>
+        {% empty %}
+        <div class="empty-state">
+            <p>🎉 All settled! No pending transactions.</p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

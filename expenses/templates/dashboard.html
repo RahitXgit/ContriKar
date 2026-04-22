@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% load tz %}
+
+{% block title %}Dashboard — ContriKar{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p class="page-subtitle">Hey {{ user.name }} 👋</p>
+</div>
+
+<!-- Balances Summary -->
+<section class="section">
+    <h2 class="section-title">Balances</h2>
+    <div class="balance-grid">
+        {% for b in balances %}
+        <div class="balance-card {% if b.balance > 0 %}balance-positive{% elif b.balance < 0 %}balance-negative{% else %}balance-zero{% endif %}">
+            <div class="balance-name">{{ b.user.name }}</div>
+            <div class="balance-amount">
+                {% if b.balance > 0 %}+{% endif %}₹{{ b.balance }}
+            </div>
+            <div class="balance-label">{{ b.status }}</div>
+        </div>
+        {% empty %}
+        <p class="empty-state">No users yet.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Expense Log -->
+<section class="section">
+    <h2 class="section-title">Recent Expenses</h2>
+    <div class="expense-list">
+        {% for exp in expenses %}
+        <div class="expense-card">
+            <div class="expense-main">
+                <div class="expense-desc">
+                    {{ exp.description }}
+                    <span class="badge {% if exp.split_mode == 'itemized' %}badge-itemized{% else %}badge-equal{% endif %}">
+                        {% if exp.split_mode == 'itemized' %}Itemized{% else %}Equal{% endif %}
+                    </span>
+                </div>
+                <div class="expense-amount">₹{{ exp.amount }}</div>
+            </div>
+            <div class="expense-meta">
+                <span class="expense-payer">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    {{ exp.paid_by.name }}
+                </span>
+                <span class="expense-time">
+                    {% timezone "Asia/Kolkata" %}
+                    {{ exp.created_at|date:"d M Y, g:i A" }}
+                    {% endtimezone %}
+                </span>
+            </div>
+
+            {% if exp.split_mode == 'itemized' %}
+            <!-- Itemized breakdown -->
+            <details class="expense-details">
+                <summary class="expense-details-summary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    View {{ exp.items.all|length }} item{{ exp.items.all|length|pluralize }}
+                </summary>
+                <div class="expense-items-list">
+                    {% for item in exp.items.all %}
+                    <div class="expense-item-row">
+                        <div class="expense-item-main">
+                            <span class="expense-item-desc">{{ item.description }}</span>
+                            <span class="expense-item-price">₹{{ item.price }}</span>
+                        </div>
+                        <div class="expense-splits-row">
+                            {% for is in item.item_splits.all %}
+                            <span class="split-chip">{{ is.employee.name }} · ₹{{ is.share_amount }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </details>
+            {% else %}
+            <!-- Equal split -->
+            <div class="expense-splits-row">
+                <span class="split-label">Split among:</span>
+                {% for s in exp.splits.all %}
+                <span class="split-chip">{{ s.employee.name }} · ₹{{ s.share_amount }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% empty %}
+        <div class="empty-state">
+            <p>No expenses yet. Tap <strong>Add</strong> to get started!</p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

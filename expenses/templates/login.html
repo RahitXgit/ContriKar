@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Login — ContriKar{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-header">
+            <span class="auth-icon">💸</span>
+            <h1>ContriKar</h1>
+            <p class="auth-subtitle">Split expenses, not friendships</p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" class="auth-form">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="employee_id">Employee ID</label>
+                <input
+                    type="text"
+                    id="employee_id"
+                    name="employee_id"
+                    placeholder="Enter your employee ID"
+                    autocomplete="off"
+                    autofocus
+                    required
+                >
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+        </form>
+
+        <p class="auth-footer">
+            Not registered? Just enter your ID — we'll get you set up.
+        </p>
+    </div>
+</div>
+{% endblock %}

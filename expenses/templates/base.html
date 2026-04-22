@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ContriKar — Group expense splitting made effortless">
+    <title>{% block title %}ContriKar{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    {% if user %}
+    <nav class="navbar">
+        <a href="{% url 'dashboard' %}" class="nav-brand">
+            <span class="brand-icon">💸</span>
+            <span class="brand-text">ContriKar</span>
+        </a>
+        <div class="nav-actions">
+            <span class="nav-user">{{ user.name }}</span>
+            <a href="{% url 'logout' %}" class="btn btn-ghost btn-sm">Logout</a>
+        </div>
+    </nav>
+    {% endif %}
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% if user %}
+    <nav class="bottom-nav">
+        <a href="{% url 'dashboard' %}" class="bottom-nav-item {% block nav_dashboard %}{% endblock %}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+            <span>Dashboard</span>
+        </a>
+        <a href="{% url 'add_expense' %}" class="bottom-nav-item {% block nav_add %}{% endblock %}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            <span>Add</span>
+        </a>
+        <a href="{% url 'settle' %}" class="bottom-nav-item {% block nav_settle %}{% endblock %}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span>Settle</span>
+        </a>
+    </nav>
+    {% endif %}
+</body>
+</html>
