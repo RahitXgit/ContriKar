@@ -1152,3 +1152,73 @@ a:hover {
     flex: 1;
 }
 
+/* ---------- Search Bar ---------- */
+.search-bar {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.search-input {
+    width: 100%;
+    padding: 14px 16px 14px 44px;
+    font-family: var(--font);
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    background: var(--bg-glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    outline: none;
+    transition: all 0.25s ease;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.search-input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+    background: var(--bg-card-hover);
+}
+
+/* ---------- Interactive Expense Cards (All Expenses) ---------- */
+.expense-card-interactive {
+    animation: fadeSlideIn 0.3s ease both;
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.expense-card-interactive:nth-child(1)  { animation-delay: 0.02s; }
+.expense-card-interactive:nth-child(2)  { animation-delay: 0.04s; }
+.expense-card-interactive:nth-child(3)  { animation-delay: 0.06s; }
+.expense-card-interactive:nth-child(4)  { animation-delay: 0.08s; }
+.expense-card-interactive:nth-child(5)  { animation-delay: 0.10s; }
+.expense-card-interactive:nth-child(6)  { animation-delay: 0.12s; }
+.expense-card-interactive:nth-child(7)  { animation-delay: 0.14s; }
+.expense-card-interactive:nth-child(8)  { animation-delay: 0.16s; }
+.expense-card-interactive:nth-child(9)  { animation-delay: 0.18s; }
+.expense-card-interactive:nth-child(10) { animation-delay: 0.20s; }
+

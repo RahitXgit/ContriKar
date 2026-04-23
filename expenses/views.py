@@ -132,6 +132,32 @@ def dashboard_view(request):
 
 
 @login_required
+def all_expenses_view(request):
+    """Show all expenses in descending order (newest first)."""
+    current_user = get_logged_in_user(request)
+    expenses = (
+        Expense.objects
+        .select_related('paid_by')
+        .prefetch_related(
+            'splits__employee',
+            'items__item_splits__employee',
+        )
+        .order_by('-created_at')
+    )
+
+    # Compute total across all expenses
+    total_spent = sum(e.amount for e in expenses)
+
+    return render(request, 'all_expenses.html', {
+        'user': current_user,
+        'expenses': expenses,
+        'total_spent': total_spent,
+        'expense_count': expenses.count(),
+        'is_admin': is_admin(current_user),
+    })
+
+
+@login_required
 def add_expense_view(request):
     current_user = get_logged_in_user(request)
     all_users = User.objects.all().order_by('name')
