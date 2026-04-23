@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tz %}
 
 {% block title %}Settle Up — ContriKar{% endblock %}
 {% block nav_settle %}active{% endblock %}
@@ -6,7 +7,7 @@
 {% block content %}
 <div class="page-header">
     <h1>Settle Up</h1>
-    <p class="page-subtitle">Minimum transactions to clear all debts</p>
+    <p class="page-subtitle">Direct debts between members</p>
 </div>
 
 <!-- Net Balances -->
@@ -30,19 +31,95 @@
     <h2 class="section-title">Transactions</h2>
     <div class="settle-list">
         {% for t in transactions %}
-        <div class="settle-card">
-            <div class="settle-from">{{ t.from_user.name }}</div>
-            <div class="settle-arrow">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        <div class="settle-card-wrap">
+            <div class="settle-card">
+                <div class="settle-from">{{ t.from_user.name }}</div>
+                <div class="settle-arrow">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </div>
+                <div class="settle-to">{{ t.to_user.name }}</div>
+                <div class="settle-amount">₹{{ t.amount }}</div>
+                <button type="button" class="btn-mark-paid" onclick="togglePayForm('{{ t.from_user.employee_id }}_{{ t.to_user.employee_id }}')" id="btn-mark-{{ t.from_user.employee_id }}_{{ t.to_user.employee_id }}">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Mark as Paid
+                </button>
             </div>
-            <div class="settle-to">{{ t.to_user.name }}</div>
-            <div class="settle-amount">₹{{ t.amount }}</div>
+            <!-- Inline payment form (hidden by default) -->
+            <div class="pay-form" id="pay-form-{{ t.from_user.employee_id }}_{{ t.to_user.employee_id }}" style="display:none;">
+                <form method="POST" action="{% url 'record_settlement' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="paid_by" value="{{ t.from_user.employee_id }}">
+                    <input type="hidden" name="paid_to" value="{{ t.to_user.employee_id }}">
+                    <div class="pay-form-row">
+                        <div class="pay-form-field">
+                            <label>Amount</label>
+                            <input type="number" name="amount" value="{{ t.amount }}" step="0.01" min="0.01" max="{{ t.amount }}" required>
+                        </div>
+                        <div class="pay-form-field">
+                            <label>Note <span class="optional-label">(optional)</span></label>
+                            <input type="text" name="note" placeholder="GPay, Cash, UPI…">
+                        </div>
+                    </div>
+                    <div class="pay-form-actions">
+                        <button type="submit" class="btn btn-settle-confirm btn-sm">Confirm Payment</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="togglePayForm('{{ t.from_user.employee_id }}_{{ t.to_user.employee_id }}')">Cancel</button>
+                    </div>
+                </form>
+            </div>
         </div>
         {% empty %}
-        <div class="empty-state">
-            <p>🎉 All settled! No pending transactions.</p>
+        <div class="all-settled-banner">
+            <span class="all-settled-icon">🎉</span>
+            <span>All settled up! No pending transactions.</span>
         </div>
         {% endfor %}
     </div>
 </section>
+
+<!-- Payment History -->
+<section class="section">
+    <h2 class="section-title">Payment History</h2>
+    <div class="history-list">
+        {% for s in settlement_history %}
+        <div class="history-card">
+            <div class="history-date">
+                {% timezone "Asia/Kolkata" %}
+                {{ s.created_at|date:"d M, H:i" }}
+                {% endtimezone %}
+            </div>
+            <div class="history-detail">
+                <span class="history-from">{{ s.paid_by.name }}</span>
+                <svg class="history-arrow-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <span class="history-to">{{ s.paid_to.name }}</span>
+            </div>
+            <div class="history-amount">₹{{ s.amount }}</div>
+            {% if s.note %}
+            <div class="history-note">{{ s.note }}</div>
+            {% endif %}
+        </div>
+        {% empty %}
+        <div class="empty-state">
+            <p>No payments recorded yet.</p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<script>
+function togglePayForm(pairId) {
+    const form = document.getElementById('pay-form-' + pairId);
+    const btn = document.getElementById('btn-mark-' + pairId);
+    if (form.style.display === 'none') {
+        // Close all other forms first
+        document.querySelectorAll('.pay-form').forEach(f => f.style.display = 'none');
+        document.querySelectorAll('.btn-mark-paid').forEach(b => b.classList.remove('btn-mark-active'));
+        form.style.display = 'block';
+        btn.classList.add('btn-mark-active');
+        form.querySelector('input[name="amount"]').focus();
+    } else {
+        form.style.display = 'none';
+        btn.classList.remove('btn-mark-active');
+    }
+}
+</script>
 {% endblock %}

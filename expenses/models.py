@@ -101,3 +101,29 @@ class ExpenseItemSplit(models.Model):
 
     def __str__(self):
         return f"{self.employee.name} owes ₹{self.share_amount} for {self.item.description}"
+
+
+class Settlement(models.Model):
+    """A settlement payment between two users."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    paid_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='settlements_paid',
+        db_column='paid_by'
+    )
+    paid_to = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='settlements_received',
+        db_column='paid_to'
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    note = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'settlements'
+        managed = False
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.paid_by.name} → {self.paid_to.name}: ₹{self.amount}"

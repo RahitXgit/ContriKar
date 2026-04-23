@@ -6,7 +6,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.http import HttpResponseForbidden
 
-from .models import User, Expense, ExpenseSplit, ExpenseItem, ExpenseItemSplit
+from .models import User, Expense, ExpenseSplit, ExpenseItem, ExpenseItemSplit, Settlement
 
 # ---------- admin config ----------
 ADMIN_EMPLOYEE_ID = '3199815'
@@ -333,11 +333,56 @@ def settle_view(request):
     balances = compute_balances()
     transactions = compute_pairwise_settlements()
 
+    # Settlement history — newest first
+    settlement_history = (
+        Settlement.objects
+        .select_related('paid_by', 'paid_to')
+        .order_by('-created_at')
+    )
+
     return render(request, 'settle.html', {
         'user': current_user,
         'transactions': transactions,
         'balances': balances,
+        'settlement_history': settlement_history,
     })
+
+
+@login_required
+def record_settlement(request):
+    """Record a settlement payment between two users."""
+    if request.method != 'POST':
+        return redirect('settle')
+
+    paid_by_id = request.POST.get('paid_by', '').strip()
+    paid_to_id = request.POST.get('paid_to', '').strip()
+    amount_str = request.POST.get('amount', '').strip()
+    note = request.POST.get('note', '').strip() or None
+
+    if not paid_by_id or not paid_to_id or not amount_str:
+        return redirect('settle')
+
+    try:
+        amount = Decimal(amount_str)
+        if amount <= 0:
+            raise ValueError
+    except (ValueError, Exception):
+        return redirect('settle')
+
+    try:
+        payer = User.objects.get(employee_id=paid_by_id)
+        payee = User.objects.get(employee_id=paid_to_id)
+    except User.DoesNotExist:
+        return redirect('settle')
+
+    Settlement.objects.create(
+        paid_by=payer,
+        paid_to=payee,
+        amount=amount,
+        note=note,
+    )
+
+    return redirect('settle')
 
 
 # ---------- admin views ----------
@@ -573,6 +618,7 @@ def compute_balances():
     """
     Compute net balance for every user.
     Handles both 'equal' (expense_splits) and 'itemized' (expense_item_splits) modes.
+    Also factors in settlements.
     Positive = others owe you (creditor).
     Negative = you owe others (debtor).
     """
@@ -597,6 +643,11 @@ def compute_balances():
                     net[payer_id] += split.share_amount
                     net[split.employee_id] -= split.share_amount
 
+    # Factor in settlements: paid_by reduces their debt, paid_to reduces their credit
+    for settlement in Settlement.objects.all():
+        net[settlement.paid_by_id] += settlement.amount
+        net[settlement.paid_to_id] -= settlement.amount
+
     # Build result with user objects
     result = []
     for user in User.objects.all().order_by('name'):
@@ -614,6 +665,7 @@ def compute_pairwise_settlements():
     """
     Compute direct pairwise net debts between users.
     For each expense, track who owes whom directly, then net out each pair.
+    Also factors in settlement payments.
     Returns list of {from_user, to_user, amount}.
     """
     # pairwise[debtor_id][creditor_id] = total amount owed
@@ -633,6 +685,11 @@ def compute_pairwise_settlements():
             for split in expense.splits.all():
                 if split.employee_id != payer_id:
                     pairwise[split.employee_id][payer_id] += split.share_amount
+
+    # Factor in settlements: settlement reduces debtor→creditor debt
+    for settlement in Settlement.objects.all():
+        # paid_by was the debtor, paid_to was the creditor
+        pairwise[settlement.paid_by_id][settlement.paid_to_id] -= settlement.amount
 
     # Net out each pair and build transactions
     transactions = []
