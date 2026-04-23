@@ -328,10 +328,10 @@ def _handle_itemized_split(request, payer):
 
 @login_required
 def settle_view(request):
-    """Compute minimum transactions to settle all debts."""
+    """Compute pairwise net debts to settle all balances."""
     current_user = get_logged_in_user(request)
     balances = compute_balances()
-    transactions = compute_settlements(balances)
+    transactions = compute_pairwise_settlements()
 
     return render(request, 'settle.html', {
         'user': current_user,
@@ -610,45 +610,65 @@ def compute_balances():
     return result
 
 
-def compute_settlements(balances):
+def compute_pairwise_settlements():
     """
-    Greedy algorithm: match largest creditor with largest debtor repeatedly.
+    Compute direct pairwise net debts between users.
+    For each expense, track who owes whom directly, then net out each pair.
     Returns list of {from_user, to_user, amount}.
     """
-    creditors = []  # (user, amount)
-    debtors = []    # (user, abs_amount)
+    # pairwise[debtor_id][creditor_id] = total amount owed
+    pairwise = defaultdict(lambda: defaultdict(Decimal))
 
-    for b in balances:
-        if b['balance'] > 0:
-            creditors.append([b['user'], b['balance']])
-        elif b['balance'] < 0:
-            debtors.append([b['user'], abs(b['balance'])])
+    for expense in Expense.objects.prefetch_related(
+        'splits', 'items__item_splits'
+    ).all():
+        payer_id = expense.paid_by_id
 
-    # Sort descending by amount
-    creditors.sort(key=lambda x: x[1], reverse=True)
-    debtors.sort(key=lambda x: x[1], reverse=True)
+        if expense.split_mode == 'itemized':
+            for item in expense.items.all():
+                for item_split in item.item_splits.all():
+                    if item_split.employee_id != payer_id:
+                        pairwise[item_split.employee_id][payer_id] += item_split.share_amount
+        else:
+            for split in expense.splits.all():
+                if split.employee_id != payer_id:
+                    pairwise[split.employee_id][payer_id] += split.share_amount
 
+    # Net out each pair and build transactions
     transactions = []
-    i, j = 0, 0
+    processed = set()
+    users = {u.employee_id: u for u in User.objects.all()}
 
-    while i < len(creditors) and j < len(debtors):
-        creditor, credit = creditors[i]
-        debtor, debt = debtors[j]
-        settle_amount = min(credit, debt)
+    all_ids = set(pairwise.keys())
+    for debtor_id in pairwise:
+        all_ids.update(pairwise[debtor_id].keys())
 
-        if settle_amount > 0:
-            transactions.append({
-                'from_user': debtor,
-                'to_user': creditor,
-                'amount': settle_amount.quantize(Decimal('0.01')),
-            })
+    for a_id in all_ids:
+        for b_id in all_ids:
+            if a_id >= b_id:
+                continue
+            pair = (a_id, b_id)
+            if pair in processed:
+                continue
+            processed.add(pair)
 
-        creditors[i][1] -= settle_amount
-        debtors[j][1] -= settle_amount
+            a_owes_b = pairwise.get(a_id, {}).get(b_id, Decimal('0'))
+            b_owes_a = pairwise.get(b_id, {}).get(a_id, Decimal('0'))
+            net = a_owes_b - b_owes_a
 
-        if creditors[i][1] == 0:
-            i += 1
-        if debtors[j][1] == 0:
-            j += 1
+            if net > 0:
+                transactions.append({
+                    'from_user': users[a_id],
+                    'to_user': users[b_id],
+                    'amount': net.quantize(Decimal('0.01')),
+                })
+            elif net < 0:
+                transactions.append({
+                    'from_user': users[b_id],
+                    'to_user': users[a_id],
+                    'amount': abs(net).quantize(Decimal('0.01')),
+                })
 
+    # Sort by amount descending for readability
+    transactions.sort(key=lambda t: t['amount'], reverse=True)
     return transactions
