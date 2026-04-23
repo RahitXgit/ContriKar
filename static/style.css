@@ -984,3 +984,171 @@ a:hover {
     color: var(--accent-light);
     white-space: nowrap;
 }
+
+/* ---------- Admin Badge ---------- */
+.admin-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #ffd93d;
+    background: rgba(255, 217, 61, 0.12);
+    border: 1px solid rgba(255, 217, 61, 0.3);
+    border-radius: var(--radius-full);
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+/* ---------- Admin Action Buttons ---------- */
+.admin-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.btn-admin {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    font-family: var(--font);
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    background: transparent;
+    outline: none;
+}
+
+.btn-admin-edit {
+    color: var(--accent-light);
+    border-color: rgba(108, 92, 231, 0.3);
+}
+
+.btn-admin-edit:hover {
+    background: rgba(108, 92, 231, 0.12);
+    border-color: var(--accent);
+    color: var(--accent-light);
+    transform: translateY(-1px);
+}
+
+.btn-admin-delete {
+    color: var(--red);
+    border-color: var(--red-border);
+}
+
+.btn-admin-delete:hover {
+    background: var(--red-bg);
+    border-color: var(--red);
+    transform: translateY(-1px);
+}
+
+/* ---------- Delete Confirmation Modal ---------- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.25s ease;
+    padding: 20px;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-card {
+    width: 100%;
+    max-width: 380px;
+    padding: 32px 28px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    text-align: center;
+    transform: scale(0.9) translateY(20px);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-overlay.active .modal-card {
+    transform: scale(1) translateY(0);
+}
+
+.modal-icon {
+    font-size: 2.4rem;
+    margin-bottom: 12px;
+}
+
+.modal-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.modal-message {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 24px;
+}
+
+.modal-message strong {
+    color: var(--text-primary);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.modal-actions .btn {
+    flex: 1;
+    max-width: 160px;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+}
+
+.btn-danger:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 25px rgba(255, 107, 107, 0.45);
+}
+
+.btn-danger:active {
+    transform: translateY(0);
+}
+
+/* ---------- Edit Form Actions ---------- */
+.edit-form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.edit-form-actions .btn {
+    flex: 1;
+}
+

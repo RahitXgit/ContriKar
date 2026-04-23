@@ -19,7 +19,21 @@
             <span class="brand-text">ContriKar</span>
         </a>
         <div class="nav-actions">
-            <span class="nav-user">{{ user.name }}</span>
+            <span class="nav-user">
+                {{ user.name }}
+                {% if is_admin %}<span class="admin-badge">Admin</span>{% endif %}
+            </span>
+            <a href="{% url 'logout' %}" class="btn btn-ghost btn-sm">Logout</a>
+        </div>
+    </nav>
+    {% elif request.session.employee_id %}
+    <!-- Stale session fallback — user deleted from DB but cookie persists -->
+    <nav class="navbar">
+        <span class="nav-brand">
+            <span class="brand-icon">💸</span>
+            <span class="brand-text">ContriKar</span>
+        </span>
+        <div class="nav-actions">
             <a href="{% url 'logout' %}" class="btn btn-ghost btn-sm">Logout</a>
         </div>
     </nav>

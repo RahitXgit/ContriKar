@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Expense — ContriKar{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Edit Expense</h1>
+    <p class="page-subtitle">
+        Editing: {{ expense.description }}
+        <span class="badge {% if expense.split_mode == 'itemized' %}badge-itemized{% else %}badge-equal{% endif %}">
+            {% if expense.split_mode == 'itemized' %}Itemized{% else %}Equal{% endif %}
+        </span>
+    </p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<form method="POST" class="form-card" id="editForm">
+    {% csrf_token %}
+
+    <!-- Description -->
+    <div class="form-group">
+        <label for="description">What's this for?</label>
+        <input
+            type="text"
+            id="description"
+            name="description"
+            value="{{ expense.description }}"
+            placeholder="e.g. Team lunch at Barbeque Nation"
+            required
+        >
+    </div>
+
+    <!-- Paid By -->
+    <div class="form-group">
+        <label for="paid_by">Who paid?</label>
+        <select id="paid_by" name="paid_by" required>
+            {% for u in all_users %}
+            <option value="{{ u.employee_id }}" {% if u.employee_id == expense.paid_by.employee_id %}selected{% endif %}>
+                {{ u.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    {% if expense.split_mode == 'equal' %}
+    <!-- ===== EQUAL SPLIT SECTION ===== -->
+    <div class="form-group">
+        <label for="amount">Amount (₹)</label>
+        <input
+            type="number"
+            id="amount"
+            name="amount"
+            value="{{ expense.amount }}"
+            placeholder="0.00"
+            step="0.01"
+            min="0.01"
+            required
+        >
+    </div>
+
+    <div class="form-group">
+        <label>Split among</label>
+        <div class="checkbox-grid">
+            {% for u in all_users %}
+            <label class="checkbox-card" for="edit_split_{{ u.employee_id }}">
+                <input
+                    type="checkbox"
+                    id="edit_split_{{ u.employee_id }}"
+                    name="split_among"
+                    value="{{ u.employee_id }}"
+                    {% if u.employee_id in current_split_ids %}checked{% endif %}
+                >
+                <span class="checkbox-label">{{ u.name }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% else %}
+    <!-- ===== ITEMIZED SECTION ===== -->
+    <input type="hidden" name="item_count" id="itemCount" value="0">
+
+    <div id="itemsList"></div>
+
+    <button type="button" class="btn btn-ghost btn-block" id="addItemBtn" style="margin-top: 8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Item
+    </button>
+
+    <div class="item-total-bar">
+        <span>Total</span>
+        <span id="itemizedTotal">₹0.00</span>
+    </div>
+    {% endif %}
+
+    <div class="edit-form-actions">
+        <a href="{% url 'dashboard' %}" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </div>
+</form>
+
+{% if expense.split_mode == 'itemized' %}
+<script>
+(function() {
+    const allUsers = [
+        {% for u in all_users %}
+        { id: "{{ u.employee_id }}", name: "{{ u.name }}" },
+        {% endfor %}
+    ];
+
+    const itemsList = document.getElementById('itemsList');
+    const itemCountInput = document.getElementById('itemCount');
+    const addItemBtn = document.getElementById('addItemBtn');
+
+    let itemIndex = 0;
+
+    // Pre-populate with existing items
+    const existingItems = JSON.parse('{{ current_items_json|escapejs }}');
+
+    existingItems.forEach(function(itemData) {
+        addItem(itemData.description, itemData.price, itemData.assigned_ids);
+    });
+
+    addItemBtn.addEventListener('click', function() { addItem(); });
+
+    function addItem(prefillDesc, prefillPrice, prefillAssigned) {
+        const idx = itemIndex++;
+        itemCountInput.value = itemIndex;
+
+        const card = document.createElement('div');
+        card.className = 'item-card';
+        card.dataset.idx = idx;
+
+        let checkboxesHtml = '';
+        allUsers.forEach(function(u) {
+            const checked = prefillAssigned && prefillAssigned.indexOf(u.id) !== -1 ? 'checked' : '';
+            checkboxesHtml += '<label class="checkbox-card checkbox-card-sm" for="item_assigned_' + idx + '_' + u.id + '">' +
+                '<input type="checkbox" id="item_assigned_' + idx + '_' + u.id + '"' +
+                ' name="item_assigned_' + idx + '" value="' + u.id + '" ' + checked + '>' +
+                '<span class="checkbox-label">' + u.name + '</span>' +
+                '</label>';
+        });
+
+        card.innerHTML =
+            '<div class="item-card-header">' +
+                '<span class="item-card-title">Item ' + (idx + 1) + '</span>' +
+                '<button type="button" class="btn-icon-remove" onclick="this.closest(\'.item-card\').remove(); recalcTotal(); recount();">' +
+                    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+                '</button>' +
+            '</div>' +
+            '<div class="form-group">' +
+                '<input type="text" name="item_desc_' + idx + '" placeholder="Item description" required value="' + (prefillDesc || '') + '">' +
+            '</div>' +
+            '<div class="form-group">' +
+                '<input type="number" name="item_price_' + idx + '" placeholder="Price (₹)" step="0.01" min="0.01" required class="item-price-input" oninput="recalcTotal()" value="' + (prefillPrice || '') + '">' +
+            '</div>' +
+            '<div class="form-group">' +
+                '<label class="label-sm">Assigned to</label>' +
+                '<div class="checkbox-grid">' + checkboxesHtml + '</div>' +
+            '</div>';
+
+        itemsList.appendChild(card);
+        recalcTotal();
+    }
+
+    window.recalcTotal = function() {
+        let total = 0;
+        document.querySelectorAll('.item-price-input').forEach(function(inp) {
+            const val = parseFloat(inp.value);
+            if (!isNaN(val)) total += val;
+        });
+        document.getElementById('itemizedTotal').textContent = '₹' + total.toFixed(2);
+    };
+
+    window.recount = function() {
+        const cards = itemsList.querySelectorAll('.item-card');
+        let maxIdx = 0;
+        cards.forEach(function(card) {
+            const idx = parseInt(card.dataset.idx);
+            if (idx >= maxIdx) maxIdx = idx + 1;
+        });
+        itemCountInput.value = maxIdx;
+    };
+})();
+</script>
+{% endif %}
+{% endblock %}

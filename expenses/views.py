@@ -2,10 +2,14 @@ import json
 from decimal import Decimal, ROUND_HALF_UP
 from collections import defaultdict
 
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
+from django.http import HttpResponseForbidden
 
 from .models import User, Expense, ExpenseSplit, ExpenseItem, ExpenseItemSplit
+
+# ---------- admin config ----------
+ADMIN_EMPLOYEE_ID = '3199815'
 
 
 # ---------- helpers ----------
@@ -21,10 +25,22 @@ def get_logged_in_user(request):
         return None
 
 
+def is_admin(user):
+    """Check if user has admin privileges."""
+    if user is None:
+        return False
+    return user.employee_id == ADMIN_EMPLOYEE_ID
+
+
 def login_required(view_fn):
-    """Simple decorator — redirect to login if no session."""
+    """Redirect to login if no session OR if user no longer exists in DB."""
     def wrapper(request, *args, **kwargs):
-        if not request.session.get('employee_id'):
+        eid = request.session.get('employee_id')
+        if not eid:
+            return redirect('login')
+        # Verify user still exists in DB (handles DB wipe / stale session)
+        if not User.objects.filter(employee_id=eid).exists():
+            request.session.flush()
             return redirect('login')
         return view_fn(request, *args, **kwargs)
     return wrapper
@@ -111,6 +127,7 @@ def dashboard_view(request):
         'expenses': expenses,
         'balances': balances,
         'all_users': all_users,
+        'is_admin': is_admin(current_user),
     })
 
 
@@ -294,6 +311,233 @@ def settle_view(request):
         'user': current_user,
         'transactions': transactions,
         'balances': balances,
+    })
+
+
+# ---------- admin views ----------
+
+@login_required
+def delete_expense_view(request, expense_id):
+    """Admin-only: delete an expense and all associated splits/items."""
+    current_user = get_logged_in_user(request)
+    if not is_admin(current_user):
+        return HttpResponseForbidden('Admin access required.')
+
+    expense = get_object_or_404(Expense, id=expense_id)
+
+    if request.method == 'POST':
+        # Delete child records first (items, item_splits, splits)
+        for item in expense.items.all():
+            item.item_splits.all().delete()
+            item.delete()
+        expense.splits.all().delete()
+        expense.delete()
+        return redirect('dashboard')
+
+    # GET — show confirmation page (shouldn't normally be hit via UI)
+    return redirect('dashboard')
+
+
+@login_required
+def edit_expense_view(request, expense_id):
+    """Admin-only: edit an existing expense."""
+    current_user = get_logged_in_user(request)
+    if not is_admin(current_user):
+        return HttpResponseForbidden('Admin access required.')
+
+    expense = get_object_or_404(
+        Expense.objects.select_related('paid_by').prefetch_related(
+            'splits__employee', 'items__item_splits__employee'
+        ),
+        id=expense_id,
+    )
+    all_users = User.objects.all().order_by('name')
+    error = ''
+
+    if request.method == 'POST':
+        split_mode = expense.split_mode
+        paid_by_id = request.POST.get('paid_by', '').strip()
+
+        payer = None
+        if not paid_by_id:
+            error = 'Please select who paid.'
+        else:
+            try:
+                payer = User.objects.get(employee_id=paid_by_id)
+            except User.DoesNotExist:
+                error = 'Invalid payer selected.'
+
+        if not error and split_mode == 'equal':
+            description = request.POST.get('description', '').strip()
+            amount_str = request.POST.get('amount', '').strip()
+            split_among = request.POST.getlist('split_among')
+
+            if not description or not amount_str or not split_among:
+                error = 'All fields are required.'
+            else:
+                try:
+                    amount = Decimal(amount_str)
+                    if amount <= 0:
+                        raise ValueError
+                except (ValueError, Exception):
+                    error = 'Enter a valid positive amount.'
+
+            if not error:
+                # Update expense
+                expense.description = description
+                expense.amount = amount
+                expense.paid_by = payer
+                expense.save()
+
+                # Delete old splits and recreate
+                expense.splits.all().delete()
+
+                num_people = len(split_among)
+                share = (amount / Decimal(num_people)).quantize(
+                    Decimal('0.01'), rounding=ROUND_HALF_UP
+                )
+                total_shares = share * num_people
+                remainder = amount - total_shares
+
+                for i, eid in enumerate(split_among):
+                    s = share
+                    if i == 0:
+                        s += remainder
+                    ExpenseSplit.objects.create(
+                        expense=expense,
+                        employee_id=eid,
+                        share_amount=s,
+                    )
+
+                return redirect('dashboard')
+
+        elif not error and split_mode == 'itemized':
+            description = request.POST.get('description', '').strip()
+            item_count_str = request.POST.get('item_count', '0')
+
+            if not description:
+                error = 'Please provide a description.'
+
+            try:
+                item_count = int(item_count_str)
+            except ValueError:
+                error = 'Invalid item data.'
+
+            if not error and item_count <= 0:
+                error = 'Add at least one item.'
+
+            items_data = []
+            total_amount = Decimal('0.00')
+
+            if not error:
+                for idx in range(item_count):
+                    item_desc = request.POST.get(f'item_desc_{idx}', '').strip()
+                    item_price_str = request.POST.get(f'item_price_{idx}', '').strip()
+                    item_assigned = request.POST.getlist(f'item_assigned_{idx}')
+
+                    if not item_desc and not item_price_str:
+                        continue
+
+                    if not item_desc or not item_price_str:
+                        error = 'Item: description and price are required.'
+                        break
+
+                    try:
+                        item_price = Decimal(item_price_str)
+                        if item_price <= 0:
+                            raise ValueError
+                    except (ValueError, Exception):
+                        error = f'Item "{item_desc}": enter a valid positive price.'
+                        break
+
+                    if not item_assigned:
+                        error = f'Item "{item_desc}": select at least one person.'
+                        break
+
+                    items_data.append({
+                        'description': item_desc,
+                        'price': item_price,
+                        'assigned': item_assigned,
+                    })
+                    total_amount += item_price
+
+            if not error and not items_data:
+                error = 'Add at least one item.'
+
+            if not error:
+                # Update expense
+                expense.description = description
+                expense.amount = total_amount
+                expense.paid_by = payer
+                expense.save()
+
+                # Delete old items and their splits
+                for item in expense.items.all():
+                    item.item_splits.all().delete()
+                    item.delete()
+
+                # Create new items
+                for item_data in items_data:
+                    item = ExpenseItem.objects.create(
+                        expense=expense,
+                        description=item_data['description'],
+                        price=item_data['price'],
+                    )
+                    num_people = len(item_data['assigned'])
+                    share = (item_data['price'] / Decimal(num_people)).quantize(
+                        Decimal('0.01'), rounding=ROUND_HALF_UP
+                    )
+                    total_shares = share * num_people
+                    remainder = item_data['price'] - total_shares
+
+                    for i, eid in enumerate(item_data['assigned']):
+                        s = share
+                        if i == 0:
+                            s += remainder
+                        ExpenseItemSplit.objects.create(
+                            item=item,
+                            employee_id=eid,
+                            share_amount=s,
+                        )
+
+                return redirect('dashboard')
+
+    # Build context for the edit form
+    # Gather current split member IDs
+    current_split_ids = []
+    if expense.split_mode == 'equal':
+        current_split_ids = list(
+            expense.splits.values_list('employee_id', flat=True)
+        )
+    
+    # Gather current items data for itemized mode
+    current_items = []
+    if expense.split_mode == 'itemized':
+        for item in expense.items.all():
+            current_items.append({
+                'description': item.description,
+                'price': item.price,
+                'assigned_ids': list(
+                    item.item_splits.values_list('employee_id', flat=True)
+                ),
+            })
+
+    return render(request, 'edit_expense.html', {
+        'user': current_user,
+        'expense': expense,
+        'all_users': all_users,
+        'error': error,
+        'is_admin': True,
+        'current_split_ids': current_split_ids,
+        'current_items': current_items,
+        'current_items_json': json.dumps([
+            {
+                'description': it['description'],
+                'price': str(it['price']),
+                'assigned_ids': it['assigned_ids'],
+            }
+            for it in current_items
+        ]),
     })
 
 
